@@ -219,7 +219,7 @@ public final class ElpriserAPI {
         }
 
         // Dela upp i enskilda JSON-objekt
-        String[] objects = content.split("\\},\\{");
+        String[] objects = content.split("}\\s*,\\s*\\{");
 
         for (String objStr : objects) {
             // Rensa bort resterande { och }
