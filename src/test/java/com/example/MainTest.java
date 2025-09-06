@@ -217,6 +217,21 @@ class MainTest {
     }
 
     @Test
+    void chargingWindowDoesNotUseNextDay_whenNextDayUnavailable() {
+        // Only today's 3 hours, request 2h window -> should compute within these only
+        String mockJsonToday = """
+                [{"SEK_per_kWh":0.20,"EUR_per_kWh":0.02,"EXR":10.0,"time_start":"2025-09-04T00:00:00+02:00","time_end":"2025-09-04T01:00:00+02:00"},
+                 {"SEK_per_kWh":0.10,"EUR_per_kWh":0.01,"EXR":10.0,"time_start":"2025-09-04T01:00:00+02:00","time_end":"2025-09-04T02:00:00+02:00"},
+                 {"SEK_per_kWh":0.15,"EUR_per_kWh":0.015,"EXR":10.0,"time_start":"2025-09-04T02:00:00+02:00","time_end":"2025-09-04T03:00:00+02:00"}]""";
+        ElpriserAPI.setMockResponse(mockJsonToday);
+        Main.main(new String[]{"--zone", "SE3", "--date", "2025-09-04", "--charging", "2h"});
+        String output = bos.toString();
+        // Best 2h window should be 01-03 (0.10 + 0.15)
+        assertThat(output).contains("Påbörja laddning");
+        assertThat(output).contains("01:00");
+    }
+
+    @Test
     void findOptimalCharging8Hours() {
         // Create mock data with 12 hours to allow for 8-hour window
         StringBuilder jsonBuilder = new StringBuilder("[");
@@ -298,21 +313,49 @@ class MainTest {
     }
 
     @Test
-    void handleMultipleDaysData() {
-        // Mock response with data for two days
-        String mockJson = """
+    void handleMultipleDaysData_includesNextDayForCharging() {
+        // This test ensures charging window can span days when next day data exists
+        LocalDate today = LocalDate.of(2025, 9, 4);
+        LocalDate tomorrow = today.plusDays(1);
+
+        String mockJsonToday = """
                 [{"SEK_per_kWh":0.30,"EUR_per_kWh":0.03,"EXR":10.0,"time_start":"2025-09-04T22:00:00+02:00","time_end":"2025-09-04T23:00:00+02:00"},
-                 {"SEK_per_kWh":0.25,"EUR_per_kWh":0.025,"EXR":10.0,"time_start":"2025-09-04T23:00:00+02:00","time_end":"2025-09-05T00:00:00+02:00"},
-                 {"SEK_per_kWh":0.10,"EUR_per_kWh":0.01,"EXR":10.0,"time_start":"2025-09-05T00:00:00+02:00","time_end":"2025-09-05T01:00:00+02:00"},
+                 {"SEK_per_kWh":0.25,"EUR_per_kWh":0.025,"EXR":10.0,"time_start":"2025-09-04T23:00:00+02:00","time_end":"2025-09-05T00:00:00+02:00"}]""";
+        String mockJsonTomorrow = """
+                [{"SEK_per_kWh":0.10,"EUR_per_kWh":0.01,"EXR":10.0,"time_start":"2025-09-05T00:00:00+02:00","time_end":"2025-09-05T01:00:00+02:00"},
                  {"SEK_per_kWh":0.15,"EUR_per_kWh":0.015,"EXR":10.0,"time_start":"2025-09-05T01:00:00+02:00","time_end":"2025-09-05T02:00:00+02:00"}]""";
 
-        ElpriserAPI.setMockResponse(mockJson);
+        ElpriserAPI.setMockResponseForDate(today, mockJsonToday);
+        ElpriserAPI.setMockResponseForDate(tomorrow, mockJsonTomorrow);
 
         Main.main(new String[]{"--zone", "SE3", "--date", "2025-09-04", "--charging", "4h"});
 
         String output = bos.toString();
         assertThat(output).containsIgnoringCase("påbörja laddning");
         // Should be able to find optimal charging window across day boundary
+    }
+
+    @Test
+    void chargingWindowSpansToNextDay_whenCheapestCrossesMidnight() {
+        // Prices set so best 2h window is 23:00-01:00 (0.50 at 22, 0.20 at 23, 0.05 at 00, 0.40 at 01)
+        LocalDate today = LocalDate.of(2025, 9, 4);
+        LocalDate tomorrow = today.plusDays(1);
+
+        String mockJsonToday = """
+                [{"SEK_per_kWh":0.50,"EUR_per_kWh":0.05,"EXR":10.0,"time_start":"2025-09-04T22:00:00+02:00","time_end":"2025-09-04T23:00:00+02:00"},
+                 {"SEK_per_kWh":0.20,"EUR_per_kWh":0.02,"EXR":10.0,"time_start":"2025-09-04T23:00:00+02:00","time_end":"2025-09-05T00:00:00+02:00"}]""";
+        String mockJsonTomorrow = """
+                [{"SEK_per_kWh":0.05,"EUR_per_kWh":0.005,"EXR":10.0,"time_start":"2025-09-05T00:00:00+02:00","time_end":"2025-09-05T01:00:00+02:00"},
+                 {"SEK_per_kWh":0.40,"EUR_per_kWh":0.04,"EXR":10.0,"time_start":"2025-09-05T01:00:00+02:00","time_end":"2025-09-05T02:00:00+02:00"}]""";
+
+        ElpriserAPI.setMockResponseForDate(today, mockJsonToday);
+        ElpriserAPI.setMockResponseForDate(tomorrow, mockJsonTomorrow);
+
+        Main.main(new String[]{"--zone", "SE3", "--date", "2025-09-04", "--charging", "2h"});
+        String output = bos.toString();
+        assertThat(output).contains("Påbörja laddning");
+        // Expect start at 23:00 (23 + 00 window is cheapest)
+        assertThat(output).contains("23:00");
     }
 
     @Test

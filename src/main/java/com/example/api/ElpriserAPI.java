@@ -59,6 +59,9 @@ public final class ElpriserAPI {
      * use the String it provides instead of making a real HTTP call.
      */
     private static Supplier<String> mockResponseSupplier = null;
+    
+    // New: map mock responses per date, so tests can provide different JSON per day
+    private static java.util.Map<LocalDate, String> datedMockResponses = new java.util.HashMap<>();
 
     /**
      * FOR TESTS ONLY: Sets a mock JSON response to be returned by the next API call.
@@ -68,6 +71,18 @@ public final class ElpriserAPI {
     public static void setMockResponse(String jsonResponse) {
         mockResponseSupplier = () -> jsonResponse;
     }
+    
+    /**
+     * FOR TESTS ONLY: Sets a mock JSON response for a specific date. This allows
+     * tests to simulate availability for one day but not another.
+     */
+    public static void setMockResponseForDate(LocalDate date, String jsonResponse) {
+        if (jsonResponse == null) {
+            datedMockResponses.remove(date);
+        } else {
+            datedMockResponses.put(date, jsonResponse);
+        }
+    }
 
     /**
      * FOR TESTS ONLY: Clears the mock response, causing the API to resume
@@ -75,6 +90,7 @@ public final class ElpriserAPI {
      */
     public static void clearMockResponse() {
         mockResponseSupplier = null;
+        datedMockResponses.clear();
     }
     // --- End of test fields ---
 
@@ -142,10 +158,9 @@ public final class ElpriserAPI {
         }
 
         // Check for a mock response before making a network call ---
-        if (mockResponseSupplier != null) {
+        if (mockResponseSupplier != null || !datedMockResponses.isEmpty()) {
             System.out.println("!!! ANVÄNDER MOCK-DATA FÖR TEST !!!");
-            String mockJson = mockResponseSupplier.get();
-            // If the mock is null or empty, simulate a "not found" scenario
+            String mockJson = datedMockResponses.getOrDefault(datum, mockResponseSupplier == null ? null : mockResponseSupplier.get());
             if (mockJson == null || mockJson.isBlank()) {
                 return Collections.emptyList();
             }
