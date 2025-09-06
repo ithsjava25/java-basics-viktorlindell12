@@ -1,4 +1,4 @@
-package org.example;
+package com.example;
 
 import com.example.api.ElpriserAPI;
 import org.junit.jupiter.api.AfterEach;
