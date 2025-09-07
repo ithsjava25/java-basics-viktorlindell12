@@ -50,15 +50,15 @@ Expected Command-Line Arguments:
 
 Example Usage Your Program Should Support:
 ```shell
-java Main --zone SE3 --date 2025-09-04
-java Main --zone SE1 --charging 4h
-java Main --zone SE2 --date 2025-09-04 --sorted
-java Main --help
+java -cp target/classes com.example.Main --zone SE3 --date 2025-09-04
+java -cp target/classes com.example.Main --zone SE1 --charging 4h
+java -cp target/classes com.example.Main --zone SE2 --date 2025-09-04 --sorted
+java -cp target/classes com.example.Main --help
 ```
 
 ## 3. Run
 ```shell
-java --source 24 --enable-preview .\src\main\java\com\example\Main.java
+java -cp target/classes com.example.Main
 ```
 Maven Goals
 =========
